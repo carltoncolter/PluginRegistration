@@ -714,6 +714,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             var sdkStep = (SdkMessageProcessingStep)entityList[SdkMessageProcessingStep.EntityLogicalName];
 
             // Loop through each image and set the new message property
+            #region Update Images
             List<SdkMessageProcessingStepImage> sdkImages = null;
             if (null != updateImages)
             {
@@ -752,6 +753,22 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
                     sdkImages.Add(sdkImage);
                 }
             }
+            #endregion
+
+            #region SecureConfig
+            // Copy Secure Config if changing SecureConfigId
+            if (step.SecureConfigurationId != origSecureConfigId && step.SecureConfigurationId != Guid.Empty)
+            {
+                foreach (var plugin in org.Plugins)
+                {
+                    foreach (var istep in plugin.Steps)
+                    {
+                        if (istep.SecureConfigurationId != step.SecureConfigurationId) continue;
+                        step.SecureConfiguration = istep.SecureConfiguration;
+                        break;
+                    }
+                }
+            }
 
             //This is a sanity check. The UI won't allow a user to set the secure configuration.
             if (org.SecureConfigurationPermissionDenied)
@@ -773,10 +790,10 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
 
                     Guid secureConfigId;
                     EntityState secureConfigState;
-                    if (step.SecureConfigurationId == origSecureConfigId && origSecureConfigId.GetValueOrDefault() != Guid.Empty)
+                    if (step.SecureConfigurationId != Guid.Empty)
                     {
                         //Set the ID of the secure configuration to be the
-                        secureConfigId = origSecureConfigId.GetValueOrDefault();
+                        secureConfigId = step.SecureConfigurationId;
                         secureConfigState = EntityState.Changed;
 
                         //Set the original secure config id so that the current id is not deleted
@@ -803,17 +820,38 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
                     origSecureConfigId = null;
                 }
             }
-            else if (null != origSecureConfigId)
+            else if (step.SecureConfigurationId != origSecureConfigId)
             {
-                // To null out if it was set before
-                sdkStep.SdkMessageProcessingStepSecureConfigId = null;
-                step.SecureConfigurationId = Guid.Empty;
-
-                if (Guid.Empty == origSecureConfigId)
+                if (step.SecureConfigurationId != Guid.Empty)
                 {
+                    // Setting to another step's
+                    sdkStep.SdkMessageProcessingStepSecureConfigId =
+                        new EntityReference(SdkMessageProcessingStepSecureConfig.EntityLogicalName,
+                            step.SecureConfigurationId);
                     origSecureConfigId = null;
                 }
+                else
+                {
+                    // check for other uses before removing
+                    int stepsUsingSecureConfig = 0;
+                    foreach (var plugin in org.Plugins)
+                    {
+                        foreach (var istep in plugin.Steps)
+                        {
+                            if (istep.SecureConfigurationId == origSecureConfigId)
+                            {
+                                stepsUsingSecureConfig++;
+                            }
+                        }
+                    }
+
+                    if (stepsUsingSecureConfig > 1)
+                    {
+                        origSecureConfigId = null;
+                    }
+                }
             }
+            #endregion
 
             // If the images need to be updated, there are two possible scenarios:
             // 1) The step is profiled -- The parent of the image is not the step that is currently being updated
@@ -856,7 +894,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             }
 
             // Delete the orphaned Secure config when nulling out the value on the step
-            if (null != origSecureConfigId)
+            if (Guid.Empty!= origSecureConfigId.GetValueOrDefault() && step.SecureConfigurationId == Guid.Empty)
             {
                 org.OrganizationService.Delete(SdkMessageProcessingStepSecureConfig.EntityLogicalName, origSecureConfigId.GetValueOrDefault());
             }

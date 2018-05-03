@@ -15,6 +15,8 @@
 //
 // =====================================================================
 
+using System.Linq;
+
 namespace Xrm.Sdk.PluginRegistration.Forms
 {
     using System;
@@ -37,7 +39,7 @@ namespace Xrm.Sdk.PluginRegistration.Forms
             {
                 throw new ArgumentNullException("org");
             }
-            else if (orgControl == null)
+            if (orgControl == null)
             {
                 throw new ArgumentNullException("control");
             }
@@ -287,8 +289,8 @@ namespace Xrm.Sdk.PluginRegistration.Forms
                 //}
                 //else
                 //{
-                    txtUnsecureConfiguration.Text = m_currentStep.UnsecureConfiguration;
-                    stepName = m_currentStep.Name;
+                txtUnsecureConfiguration.Text = m_currentStep.UnsecureConfiguration;
+                stepName = m_currentStep.Name;
                 //}
 
                 if (stepName == GenerateDescription())
@@ -365,6 +367,8 @@ namespace Xrm.Sdk.PluginRegistration.Forms
             }
 
             LoadEntities();
+            LoadSecureConfigSteps();
+
             CheckDeploymentSupported();
         }
 
@@ -604,7 +608,17 @@ namespace Xrm.Sdk.PluginRegistration.Forms
                 if (m_currentStep != null)
                 {
                     Guid? secureConfigurationId = m_currentStep.SecureConfigurationId;
-                    if (m_currentStep.SecureConfigurationRecordIdInvalid)
+                    step.SecureConfigurationId = m_currentStep.SecureConfigurationId;
+
+                    if (cmbSecureConfigSteps.SelectedIndex > 0)
+                    {
+                        var selectedItem = (KeyValuePair<Guid, String>)cmbSecureConfigSteps.SelectedItem;
+                        step.SecureConfigurationId = selectedItem.Key;
+                        //step.SecureConfigurationId = secureConfigurationId.GetValueOrDefault();
+
+                        //secureConfigurationId = step.SecureConfigurationId;
+                    }
+                    else if (m_currentStep.SecureConfigurationRecordIdInvalid)
                     {
                         if (m_secureConfigurationIdIsInvalid)
                         {
@@ -690,6 +704,7 @@ namespace Xrm.Sdk.PluginRegistration.Forms
 
                     step = m_currentStep;
 
+                    UpdateSecureConfigurations(step);
 
                 }
                 else
@@ -952,10 +967,8 @@ namespace Xrm.Sdk.PluginRegistration.Forms
             {
                 return;
             }
-            else
-            {
-                m_messageLoaded = Message;
-            }
+
+            m_messageLoaded = Message;
 
             Control activeControl = ActiveControl;
 
@@ -964,36 +977,54 @@ namespace Xrm.Sdk.PluginRegistration.Forms
                 txtPrimaryEntity.AutoCompleteCustomSource = new AutoCompleteStringCollection();
                 txtSecondaryEntity.AutoCompleteCustomSource = new AutoCompleteStringCollection();
 
-                if (activeControl != null)
-                {
-                    activeControl.Focus();
-                }
+                activeControl?.Focus();
                 return;
             }
-            else
+
+            AutoCompleteStringCollection primaryList = new AutoCompleteStringCollection();
+            AutoCompleteStringCollection secondaryList = new AutoCompleteStringCollection();
+            foreach (CrmMessageEntity entity in Message.FindMessageEntities(null, null))
             {
-                AutoCompleteStringCollection primaryList = new AutoCompleteStringCollection();
-                AutoCompleteStringCollection secondaryList = new AutoCompleteStringCollection();
-                foreach (CrmMessageEntity entity in Message.FindMessageEntities(null, null))
+                if (!string.IsNullOrEmpty(entity.PrimaryEntity))
                 {
-                    if (!string.IsNullOrEmpty(entity.PrimaryEntity))
-                    {
-                        primaryList.Add(entity.PrimaryEntity);
-                    }
-
-                    if (!string.IsNullOrEmpty(entity.SecondaryEntity))
-                    {
-                        secondaryList.Add(entity.SecondaryEntity);
-                    }
+                    primaryList.Add(entity.PrimaryEntity);
                 }
 
-                txtPrimaryEntity.AutoCompleteCustomSource = primaryList;
-                txtSecondaryEntity.AutoCompleteCustomSource = secondaryList;
-
-                if (activeControl != null)
+                if (!string.IsNullOrEmpty(entity.SecondaryEntity))
                 {
-                    activeControl.Focus();
+                    secondaryList.Add(entity.SecondaryEntity);
                 }
+            }
+
+            txtPrimaryEntity.AutoCompleteCustomSource = primaryList;
+            txtSecondaryEntity.AutoCompleteCustomSource = secondaryList;
+
+            activeControl?.Focus();
+        }
+
+        private void LoadSecureConfigSteps()
+        {
+            cmbSecureConfigSteps.Items.Clear();
+            cmbSecureConfigSteps.Items.Add(new KeyValuePair<Guid, string>(Guid.Empty, ""));
+
+            foreach (var plugin in m_org.Plugins.OrderBy(p => p.Name))
+            {
+                foreach (var step in plugin.Steps
+                    .Where(s => s.SecureConfigurationId != Guid.Empty && !String.IsNullOrEmpty(s.SecureConfiguration))
+                    .OrderBy(s => s.Name))
+                {
+                    cmbSecureConfigSteps.Items.Add(new KeyValuePair<Guid, String>(step.SecureConfigurationId, $"{step.Name} ({plugin.Name})"));
+                }
+            }
+        }
+
+        private void UpdateSecureConfigurations(CrmPluginStep updatedStep)
+        {
+            foreach (var step in m_org.Plugins.SelectMany(p => p.Steps)
+                .Where(s => s.SecureConfigurationId == updatedStep.SecureConfigurationId))
+            {
+                step.SecureConfiguration = updatedStep.SecureConfiguration;
+                m_orgControl.RefreshStep(step);
             }
         }
 
