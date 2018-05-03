@@ -42,7 +42,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("assemblyName");
             }
-            else if (null == version)
+            if (null == version)
             {
                 throw new ArgumentNullException("version");
             }
@@ -86,16 +86,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             if (!string.IsNullOrEmpty(secondaryEntity) &&
                 !string.Equals(secondaryEntity, "none", StringComparison.InvariantCultureIgnoreCase))
             {
-                string format;
-                if (hasPrimaryEntity)
-                {
-                    format = "and {0}";
-                }
-                else
-                {
-                    format = "{0}";
-                }
-
+                var format = hasPrimaryEntity ? "and {0}" : "{0}";
                 descriptionBuilder.AppendFormat(format, secondaryEntity);
             }
             else if (!hasPrimaryEntity)
@@ -142,11 +133,9 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
                 pluginTypeId = results.Entities[0].Id;
                 return true;
             }
-            else
-            {
-                pluginTypeId = Guid.Empty;
-                return false;
-            }
+
+            pluginTypeId = Guid.Empty;
+            return false;
         }
 
         public static Guid RegisterAssembly(CrmOrganization org, string pathToAssembly, CrmPluginAssembly assembly)
@@ -155,11 +144,11 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (assembly == null)
+            if (assembly == null)
             {
                 throw new ArgumentNullException("assembly");
             }
-            else if (assembly.SourceType == CrmAssemblySourceType.Database && pathToAssembly == null)
+            if (assembly.SourceType == CrmAssemblySourceType.Database && pathToAssembly == null)
             {
                 throw new ArgumentNullException("pathToAssembly", "Cannot be null when SourceType is Database");
             }
@@ -179,7 +168,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (image == null)
+            if (image == null)
             {
                 throw new ArgumentNullException("image");
             }
@@ -192,11 +181,11 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (null == image)
+            if (null == image)
             {
                 throw new ArgumentNullException("image");
             }
-            else if (null == step)
+            if (null == step)
             {
                 throw new ArgumentNullException("step");
             }
@@ -221,7 +210,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (plugin == null)
+            if (plugin == null)
             {
                 throw new ArgumentNullException("plugin");
             }
@@ -237,7 +226,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (serviceEndpoint == null)
+            if (serviceEndpoint == null)
             {
                 throw new ArgumentNullException("serviceEndpoint");
             }
@@ -252,7 +241,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (step == null)
+            if (step == null)
             {
                 throw new ArgumentNullException("step");
             }
@@ -268,7 +257,9 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             }
             else if (entityList.ContainsKey(Entities.SdkMessageProcessingStepSecureConfig.EntityLogicalName))
             {
-                Guid secureConfigId = Guid.NewGuid();
+                // Don't create a new secure config if there already is one.
+                Guid secureConfigId = step.SecureConfigurationId;
+                if (secureConfigId.Equals(Guid.Empty)) secureConfigId = Guid.NewGuid();
 
                 //Create the related secure config in the related entities
                 SdkMessageProcessingStepSecureConfig sdkSecureConfig =
@@ -340,7 +331,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (crmEntity == null || crmEntity.Length == 0)
+            if (crmEntity == null || crmEntity.Length == 0)
             {
                 throw new ArgumentNullException("crmEntity");
             }
@@ -409,16 +400,13 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             }
 
             //Retrieve all of the profiler steps that need to be deleted
-            for (int i = stepList.Count - 1; i >= 0; i--)
+            for (var i = stepList.Count - 1; i >= 0; i--)
             {
-                CrmPluginStep step;
-                if (org.Steps.TryGetValue(stepList[i], out step))
+                if (!org.Steps.TryGetValue(stepList[i], out var step)) continue;
+                var profilerStepId = step.ProfilerStepId.GetValueOrDefault();
+                if (Guid.Empty != profilerStepId && profilerStepId != step.StepId)
                 {
-                    var profilerStepId = step.ProfilerStepId.GetValueOrDefault();
-                    if (Guid.Empty != profilerStepId && profilerStepId != step.StepId)
-                    {
-                        stepList.Add(profilerStepId);
-                    }
+                    stepList.Add(profilerStepId);
                 }
             }
 
@@ -471,90 +459,51 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
 
             try
             {
-                if (prog != null)
-                {
-                    prog.Initialize(totalSteps, "Unregistering Images");
-                }
+                prog?.Initialize(totalSteps, "Unregistering Images");
                 foreach (var imageId in imageList)
                 {
                     org.OrganizationService.Delete(SdkMessageProcessingStepImage.EntityLogicalName, imageId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
 
-                if (prog != null)
-                {
-                    prog.SetText("Unregistering Steps");
-                }
+                prog?.SetText("Unregistering Steps");
                 foreach (var stepId in stepList)
                 {
                     org.OrganizationService.Delete(SdkMessageProcessingStep.EntityLogicalName, stepId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
 
-                if (prog != null)
-                {
-                    prog.SetText("Unregistering Secure Configuration");
-                }
+                prog?.SetText("Unregistering Secure Configuration");
                 foreach (Guid secureConfigId in secureConfigList)
                 {
                     org.OrganizationService.Delete(SdkMessageProcessingStepSecureConfig.EntityLogicalName, secureConfigId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
 
-                if (prog != null)
-                {
-                    prog.SetText("Unregistering Plugins");
-                }
+                prog?.SetText("Unregistering Plugins");
                 foreach (var pluginId in pluginList)
                 {
                     org.OrganizationService.Delete(PluginType.EntityLogicalName, pluginId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
 
-                if (prog != null)
-                {
-                    prog.SetText("Unregistering Assemblies");
-                }
+                prog?.SetText("Unregistering Assemblies");
                 foreach (var assemblyId in assemblyList)
                 {
                     org.OrganizationService.Delete(PluginAssembly.EntityLogicalName, assemblyId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
 
-                if (prog != null)
-                {
-                    prog.SetText("Unregistering ServiceEndpoints");
-                }
+                prog?.SetText("Unregistering ServiceEndpoints");
                 foreach (var serviceEndpointId in serviceEndpointList)
                 {
                     org.OrganizationService.Delete(ServiceEndpoint.EntityLogicalName, serviceEndpointId);
-                    if (prog != null)
-                    {
-                        prog.Increment();
-                    }
+                    prog?.Increment();
                 }
             }
             finally
             {
-                if (prog != null)
-                {
-                    prog.Complete(true);
-                }
+                prog?.Complete(true);
             }
 
             return deleteStats;
@@ -573,7 +522,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (assembly == null)
+            if (assembly == null)
             {
                 throw new ArgumentNullException("assembly");
             }
@@ -602,7 +551,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (assemblyId == Guid.Empty)
+            if (assemblyId == Guid.Empty)
             {
                 throw new ArgumentNullException("assemblyId");
             }
@@ -620,7 +569,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (null == image)
+            if (null == image)
             {
                 throw new ArgumentNullException("image");
             }
@@ -634,11 +583,11 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (null == image)
+            if (null == image)
             {
                 throw new ArgumentNullException("image");
             }
-            else if (null == step)
+            if (null == step)
             {
                 throw new ArgumentNullException("step");
             }
@@ -664,7 +613,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (plugin == null)
+            if (plugin == null)
             {
                 throw new ArgumentNullException("plugin");
             }
@@ -714,11 +663,11 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (pluginId == Guid.Empty)
+            if (pluginId == Guid.Empty)
             {
                 throw new ArgumentException("Invalid Guid", "pluginId");
             }
-            else if (friendlyName == null)
+            if (friendlyName == null)
             {
                 //No updates will occur if friendly name is null. Don't need to do anything
                 return;
@@ -726,14 +675,12 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
 
             PluginType updatePlugin = new PluginType
             {
-                PluginTypeId = new Guid?()
+                PluginTypeId = new Guid?(),
+                ["plugintypeid"] = pluginId,
+                FriendlyName = friendlyName
             };
-            updatePlugin["plugintypeid"] = pluginId;
-
-            updatePlugin.FriendlyName = friendlyName;
 
             org.OrganizationService.Update(updatePlugin);
-            return;
         }
 
         public static void UpdateServiceEndpoint(CrmOrganization org, CrmServiceEndpoint serviceEndpoint)
@@ -742,7 +689,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (serviceEndpoint == null)
+            if (serviceEndpoint == null)
             {
                 throw new ArgumentNullException("serviceEndpoint");
             }
@@ -758,7 +705,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (step == null)
+            if (step == null)
             {
                 throw new ArgumentNullException("step");
             }
@@ -789,7 +736,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
                     {
                         return false;
                     }
-                    else if (string.Equals(image.MessagePropertyName, propertyName, StringComparison.Ordinal))
+                    if (string.Equals(image.MessagePropertyName, propertyName, StringComparison.Ordinal))
                     {
                         continue;
                     }
@@ -927,7 +874,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentException("Invalid Guid", "stepId");
             }
-            else if (description == null)
+            if (description == null)
             {
                 //No updates will occur if description is null. Don't need to do anything
                 return;
@@ -942,7 +889,6 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             updateStep.Description = description;
 
             org.OrganizationService.Update(updateStep);
-            return;
         }
 
         public static void UpdateStepStatus(CrmOrganization org, Guid stepId, bool isEnable)
@@ -951,7 +897,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             {
                 throw new ArgumentNullException("org");
             }
-            else if (stepId == Guid.Empty)
+            if (stepId == Guid.Empty)
             {
                 throw new ArgumentException("Invalid Guid", "stepId");
             }
@@ -971,7 +917,6 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             request.Status = new OptionSetValue(-1);
             org.OrganizationService.Execute(request);
 
-            return;
         }
 
         #endregion Public Methods
@@ -986,7 +931,7 @@ namespace Xrm.Sdk.PluginRegistration.Helpers
             }
 
             List<object> newIdList = new List<object>();
-            if (idList != null && idList.Count != 0)
+            if (idList.Count != 0)
             {
                 foreach (Guid id in idList)
                 {
